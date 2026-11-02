@@ -32,8 +32,8 @@ app.post('/api/markers/:id/hooked',(q,r)=>{const m=find(q,r);if(!m)return;const 
  const now=Date.now();if(m.status==='open'){m.enrouteBy=d;m.assignedDriver=d;m.claimedAt=m.enrouteAt=now;if(!m.firstClaimedAt){m.firstClaimedAt=now;m.grabMs=now-m.createdAt}}
  m.status='hooked';m.hookedAt=now;save();logE('hook',{id:m.id,driver:d});io.emit('marker:update',m);r.json(m);});
 app.post('/api/markers/:id/close',(q,r)=>{const m=find(q,r);if(!m)return;const d=(q.body.driver||'').slice(0,50);if(!mine(m,d,r))return;
- let st={gone:'lost',lost:'lost',wot:'wot',taken:'dropped',dropped:'dropped'}[q.body.reason]||'dropped';const now=Date.now();
- if(st==='dropped'){m.droppedAt=now;if(!m.hookedAt)m.hookedAt=now;if(!m.claimedAt){m.claimedAt=now;m.firstClaimedAt=m.firstClaimedAt||now;m.grabMs=m.grabMs??now-m.createdAt}}
+ let st={gone:'lost',lost:'lost',wot:'wot',taken:'secured',secured:'secured',dropped:'dropped'}[q.body.reason];if(!st)return r.status(400).json({error:'bad reason'});const now=Date.now();
+ if(st==='secured'||st==='dropped'){m[st+'At']=now;if(!m.hookedAt)m.hookedAt=now;if(!m.claimedAt){m.claimedAt=now;m.firstClaimedAt=m.firstClaimedAt||now;m.grabMs=m.grabMs??now-m.createdAt}}
  m.status=st;m.closeReason=st;m.closedBy=d;m.assignedDriver=m.assignedDriver||d;m.closedAt=now;m.markToCloseMs=now-m.createdAt;
  if(m.claimedAt)m.claimToCloseMs=now-m.claimedAt;save();logE('close',{id:m.id,driver:d,reason:st});
  io.emit('marker:remove',{id:m.id,status:st,by:d});r.json({ok:true});});
@@ -43,15 +43,15 @@ io.on('connection',s=>{s.on('hello',u=>{if(s.drv)return;if(u&&u.role==='driver'&
  s.on('disconnect',()=>{if(s.drv&&--online[s.drv]===0)logE('offline',{driver:s.drv})})});
 const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null,med=a=>{if(!a.length)return null;a=[...a].sort((x,y)=>x-y);return a[a.length>>1]};
 function stats(){
- const sc={},dr={};const D=n=>dr[n]??=({name:n,dropped:0,hooked:0,enroute:0,lost:0,wot:0,idleMs:0,engagedMs:0,onlineMs:0,idleSpells:0});
- for(const m of markers){const s=sc[m.scout]??=({name:m.scout,marks:0,open:0,towed:0,lost:0,wot:0,grab:[],lostMark:[],lostClaim:[]});s.marks++;
+ const sc={},dr={};const D=n=>dr[n]??=({name:n,secured:0,dropped:0,hooked:0,enroute:0,lost:0,wot:0,idleMs:0,engagedMs:0,onlineMs:0,idleSpells:0});
+ for(const m of markers){const s=sc[m.scout]??=({name:m.scout,marks:0,open:0,towed:0,dropped:0,lost:0,wot:0,grab:[],lostMark:[],lostClaim:[]});s.marks++;
   if(m.grabMs!=null)s.grab.push(m.grabMs);
   if(ACTIVE.includes(m.status))s.open++;
-  if(m.status==='dropped'||m.status==='taken')s.towed++;
+  if(m.status==='secured'||m.status==='taken')s.towed++;if(m.status==='dropped')s.dropped++;
   if(m.status==='lost'||m.status==='gone'){s.lost++;s.lostMark.push(m.markToCloseMs??(m.closedAt-m.createdAt));if(m.claimToCloseMs!=null)s.lostClaim.push(m.claimToCloseMs)}
   if(m.status==='wot')s.wot++;
   const d=m.assignedDriver||m.enrouteBy||m.closedBy;if(d){const x=D(d);
-   if(m.status==='dropped'||m.status==='taken')x.dropped++;else if(['hooked','enroute','lost','wot'].includes(m.status))x[m.status]++;else if(m.status==='gone')x.lost++}}
+   if(m.status==='secured'||m.status==='taken')x.secured++;else if(['dropped','hooked','enroute','lost','wot'].includes(m.status))x[m.status]++;else if(m.status==='gone')x.lost++}}
  // replay events
  const st={},on={},eng={};let last=null,idleNow={};
  const tick=t=>{if(last!=null){const dt=t-last,openN=Object.values(st).filter(v=>v==='open').length;
@@ -66,7 +66,7 @@ function stats(){
   else if(e.type==='online')on[e.driver]=true;else if(e.type==='offline')on[e.driver]=false;tick(e.t)}
  tick(Date.now());
  return {now:Date.now(),open:active().length,
-  scouts:Object.values(sc).map(s=>({name:s.name,marks:s.marks,open:s.open,towed:s.towed,lost:s.lost,wot:s.wot,grabbed:s.grab.length,avgGrabMs:avg(s.grab),medGrabMs:med(s.grab),avgLostMarkMs:avg(s.lostMark),avgLostClaimMs:avg(s.lostClaim)})),
+  scouts:Object.values(sc).map(s=>({name:s.name,marks:s.marks,open:s.open,towed:s.towed,dropped:s.dropped,lost:s.lost,wot:s.wot,grabbed:s.grab.length,avgGrabMs:avg(s.grab),medGrabMs:med(s.grab),avgLostMarkMs:avg(s.lostMark),avgLostClaimMs:avg(s.lostClaim)})),
   drivers:Object.values(dr).map(d=>({...d,online:!!online[d.name],avgIdleMs:d.idleSpells?Math.round(d.idleMs/d.idleSpells):null})),
   lost:markers.filter(m=>m.status==='lost'||m.status==='gone').slice(-50).reverse().map(m=>({scout:m.scout,driver:m.closedBy,createdAt:m.createdAt,markToCloseMs:m.markToCloseMs??(m.closedAt-m.createdAt),claimToCloseMs:m.claimToCloseMs??null,grabMs:m.grabMs??null,notes:m.notes}))}}
 app.get('/api/stats',(q,r)=>r.json(stats()));

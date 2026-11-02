@@ -18,8 +18,8 @@ function popup(m){const g=m.photos.map(p=>`<img src="${p}" onclick="lb('${p}')">
  let a='';if(user?.role==='driver'){const me=m.enrouteBy===user.name;
   if(m.status==='open')a=`<button class="driver" onclick="act('${m.id}','enroute')">🚚 In route</button><button onclick="act('${m.id}','hooked')">🪝 Hooked</button>`;
   else if(me&&m.status==='enroute')a=`<button onclick="act('${m.id}','hooked')">🪝 Hooked</button><button onclick="act('${m.id}','release')">Release</button>`;
-  else if(me&&m.status==='hooked')a=`<button class="ok" onclick="act('${m.id}','dropped')">✅ Dropped</button><button onclick="act('${m.id}','release')">Release</button>`;
-  if(m.status==='open'||me)a+=`<br><button class="danger" onclick="act('${m.id}','lost')">❌ Lost (not there)</button><button class="wot" onclick="act('${m.id}','wot')">⚖️ WOT (legal)</button>`;
+  else if(me&&m.status==='hooked')a=`<button class="ok" onclick="act('${m.id}','secured')">🏁 Secured (yard)</button><button class="drop" onclick="act('${m.id}','dropped')">💵 Dropped (paid/legal)</button><button onclick="act('${m.id}','release')">Release</button>`;
+  if(m.status==='open'||me){if(m.status!=='hooked')a+=`<br><button class="danger" onclick="act('${m.id}','lost')">❌ Lost (not there)</button><button class="wot" onclick="act('${m.id}','wot')">⚖️ WOT (legal)</button>`}
   else a=`<small>Claimed by ${esc(m.enrouteBy)}</small>`}
  return `<div class="pop"><b>${lbl(m)}</b><br><small>By ${esc(m.scout)} · ${new Date(m.createdAt).toLocaleString()}</small>
  ${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${g}</div><p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Open in Google Maps</a></p>${a}</div>`}
@@ -32,7 +32,7 @@ function renderList(){const a=Object.values(markers).sort((x,y)=>y.createdAt-x.c
  $('#list').innerHTML=a.map(m=>`<div class="item ${m.status}" onclick="focusM('${m.id}')"><b>${lbl(m)}</b> ${m.photos.length?'📷'+m.photos.length:''}<br>${esc(m.notes||'No notes')}<br><small>${esc(m.scout)} · ${new Date(m.createdAt).toLocaleTimeString()}</small></div>`).join('')||'<small>No open spots</small>'}
 window.focusM=id=>{const m=markers[id];if(!m)return toast('That spot was already cleared','info');map.setView([m.lat,m.lng],17);layers[id].openPopup()};
 window.lb=src=>{$('#lightbox img').src=src;$('#lightbox').classList.remove('hidden')};$('#lightbox').onclick=()=>$('#lightbox').classList.add('hidden');
-window.act=async(id,a)=>{const url=['dropped','lost','wot'].includes(a)?`/api/markers/${id}/close`:`/api/markers/${id}/${a}`;
+window.act=async(id,a)=>{const url=['secured','dropped','lost','wot'].includes(a)?`/api/markers/${id}/close`:`/api/markers/${id}/${a}`;
  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver:user.name,reason:a})});const j=await r.json();
  if(!r.ok)return alert(j.error);if(a==='enroute')toast('You are in route. Others will see this spot is claimed.','info')};
 // scout placing
@@ -63,21 +63,21 @@ const sock=io();
 sock.on('connect',async()=>{if(user)sock.emit('hello',user);const a=await (await fetch('/api/markers')).json();Object.keys(markers).forEach(id=>{if(!a.find(m=>m.id===id))removeMarker(id)});a.forEach(renderMarker)});
 sock.on('marker:new',m=>{renderMarker(m);if(user?.role==='driver')alertDriver(m)});
 sock.on('marker:update',m=>{renderMarker(m);if(layers[m.id]?.isPopupOpen())layers[m.id].setPopupContent(popup(m))});
-sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was)toast(`Spot ${{dropped:'towed (dropped)',lost:'lost (not there)',wot:'WOT (legal)'}[status]||status} by ${by}`,'info')});
+sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was)toast(`Spot ${{secured:'secured to yard',dropped:'dropped (paid/legal)',lost:'lost (not there)',wot:'WOT (legal)'}[status]||status} by ${by}`,'info')});
 
 // manager
 const fm=ms=>{if(ms==null)return '—';const s=Math.round(ms/1000);if(s<60)return s+'s';const m=Math.round(s/60);if(m<60)return m+'m';return (m/60).toFixed(1)+'h'};
 let stT;sock.on('stats:changed',()=>{if(user?.role==='manager'){clearTimeout(stT);stT=setTimeout(loadStats,500)}});
 setInterval(()=>{if(user?.role==='manager')loadStats()},30000);
 async function loadStats(){const s=await (await fetch('/api/stats')).json();
- const d=s.drivers.sort((a,b)=>b.dropped-a.dropped),c=s.scouts.sort((a,b)=>b.marks-a.marks);
+ const d=s.drivers.sort((a,b)=>b.secured-a.secured),c=s.scouts.sort((a,b)=>b.marks-a.marks);
  $('#mgrbody').innerHTML=`<p><small>Open marks now: ${s.open} · updated ${new Date(s.now).toLocaleTimeString()}</small></p>
  <h3>🚚 Drivers</h3>${d.map(x=>`<div class="sc"><b>${esc(x.name)}</b> ${x.online?'🟢':'⚪'}<div class="g">
- <span>Tows (dropped)<b>${x.dropped}</b></span><span>Hooked now<b>${x.hooked}</b></span><span>In route<b>${x.enroute}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span>
+ <span>Tows secured<b>${x.secured}</b></span><span>Dropped (paid/legal)<b>${x.dropped}</b></span><span>Hooked now<b>${x.hooked}</b></span><span>In route<b>${x.enroute}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span>
  <span>Idle w/ marks listed<b>${fm(x.idleMs)}</b></span><span>Avg idle stretch<b>${fm(x.avgIdleMs)}</b></span><span>Engaged<b>${fm(x.engagedMs)}</b></span><span>Online<b>${fm(x.onlineMs)}</b></span>
  <span>Idle %<b>${x.onlineMs?Math.round(100*x.idleMs/x.onlineMs)+'%':'—'}</b></span></div></div>`).join('')||'<small>No driver activity yet</small>'}
  <h3>🔭 Scouts</h3>${c.map(x=>`<div class="sc"><b>${esc(x.name)}</b><div class="g">
- <span>Marks<b>${x.marks}</b></span><span>Towed<b>${x.towed}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span><span>Open<b>${x.open}</b></span>
+ <span>Marks<b>${x.marks}</b></span><span>Secured (towed)<b>${x.towed}</b></span><span>Dropped<b>${x.dropped}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span><span>Open<b>${x.open}</b></span>
  <span>Tow rate<b>${x.marks?Math.round(100*x.towed/x.marks)+'%':'—'}</b></span><span>Avg grab<b>${fm(x.avgGrabMs)}</b></span><span>Median grab<b>${fm(x.medGrabMs)}</b></span>
  <span>Lost: mark→lost<b>${fm(x.avgLostMarkMs)}</b></span><span>Lost: claim→lost<b>${fm(x.avgLostClaimMs)}</b></span></div></div>`).join('')||'<small>No marks yet</small>'}
  <h3>❌ Recent lost marks</h3>${s.lost.map(l=>`<div class="sc"><small>${new Date(l.createdAt).toLocaleString()} · scout ${esc(l.scout)} · driver ${esc(l.driver)}</small><br>Mark→lost <b>${fm(l.markToCloseMs)}</b> · grab <b>${fm(l.grabMs)}</b> · claim→lost <b>${fm(l.claimToCloseMs)}</b>${l.notes?'<br><small>'+esc(l.notes)+'</small>':''}</div>`).join('')||'<small>None</small>'}`}
