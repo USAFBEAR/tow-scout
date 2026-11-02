@@ -39,11 +39,20 @@ app.post('/api/markers/:id/close',(q,r)=>{const m=find(q,r);if(!m)return;const d
  io.emit('marker:remove',{id:m.id,status:st,by:d});r.json({ok:true});});
 // presence for idle metric
 const online={};
-io.on('connection',s=>{s.on('hello',u=>{if(s.drv)return;if(u&&u.role==='driver'&&u.name){s.drv=String(u.name).slice(0,50);online[s.drv]=(online[s.drv]||0)+1;if(online[s.drv]===1)logE('online',{driver:s.drv})}});
- s.on('disconnect',()=>{if(s.drv&&--online[s.drv]===0)logE('offline',{driver:s.drv})})});
+let sessions=[];const SE=path.join(__dirname,'data','sessions.json');try{sessions=JSON.parse(fs.readFileSync(SE))}catch{}
+const now0=Date.now();sessions.forEach(x=>{if(!x.end){x.end=now0;x.note='server restart'}});
+const saveS=()=>{fs.writeFileSync(SE,JSON.stringify(sessions.slice(-5000)));io.emit('stats:changed')};
+// close driver presence left open by a previous run
+{const o={};for(const e of events){if(e.type==='online')o[e.driver]=1;if(e.type==='offline')delete o[e.driver]}for(const d in o)events.push({t:now0,type:'offline',driver:d})}
+function bye(s){if(s.sess){s.sess.end=Date.now();s.sess=null;saveS()}if(s.drv){if(--online[s.drv]===0)logE('offline',{driver:s.drv});s.drv=null}}
+io.on('connection',s=>{s.on('hello',u=>{if(!u||!u.name)return;const name=String(u.name).slice(0,50),role=['scout','driver','manager'].includes(u.role)?u.role:'?';
+  if(s.sess&&s.sess.name===name&&s.sess.role===role)return;bye(s);
+  s.sess={id:crypto.randomUUID(),name,role,start:Date.now(),end:null};sessions.push(s.sess);saveS();
+  if(role==='driver'){s.drv=name;online[name]=(online[name]||0)+1;if(online[name]===1)logE('online',{driver:name})}});
+ s.on('disconnect',()=>bye(s))});
 const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null,med=a=>{if(!a.length)return null;a=[...a].sort((x,y)=>x-y);return a[a.length>>1]};
 function stats(){
- const sc={},dr={};const D=n=>dr[n]??=({name:n,secured:0,dropped:0,hooked:0,enroute:0,lost:0,wot:0,idleMs:0,engagedMs:0,onlineMs:0,idleSpells:0});
+ const sc={},dr={};const D=n=>dr[n]??=({name:n,secured:0,dropped:0,hooked:0,enroute:0,lost:0,wot:0,idleMs:0,engagedMs:0,onlineMs:0,idleSpells:0,longestIdleMs:0});
  for(const m of markers){const s=sc[m.scout]??=({name:m.scout,marks:0,open:0,towed:0,dropped:0,lost:0,wot:0,grab:[],lostMark:[],lostClaim:[]});s.marks++;
   if(m.grabMs!=null)s.grab.push(m.grabMs);
   if(ACTIVE.includes(m.status))s.open++;
@@ -53,10 +62,10 @@ function stats(){
   const d=m.assignedDriver||m.enrouteBy||m.closedBy;if(d){const x=D(d);
    if(m.status==='secured'||m.status==='taken')x.secured++;else if(['dropped','hooked','enroute','lost','wot'].includes(m.status))x[m.status]++;else if(m.status==='gone')x.lost++}}
  // replay events
- const st={},on={},eng={};let last=null,idleNow={};
+ const st={},on={},eng={};let last=null,idleNow={},idleStart={};
  const tick=t=>{if(last!=null){const dt=t-last,openN=Object.values(st).filter(v=>v==='open').length;
    for(const d in on)if(on[d]){const x=D(d);x.onlineMs+=dt;if(eng[d]>0)x.engagedMs+=dt;else if(openN>0)x.idleMs+=dt}}last=t;
-  const openN=Object.values(st).filter(v=>v==='open').length;for(const d in on){const i=on[d]&&!(eng[d]>0)&&openN>0;if(i&&!idleNow[d])D(d).idleSpells++;idleNow[d]=i}};
+  const openN=Object.values(st).filter(v=>v==='open').length;for(const d in on){const i=on[d]&&!(eng[d]>0)&&openN>0;if(i&&!idleNow[d]){D(d).idleSpells++;idleStart[d]=t}if(!i&&idleNow[d]){const x=D(d);x.longestIdleMs=Math.max(x.longestIdleMs,t-idleStart[d])}idleNow[d]=i}};
  const own={};
  for(const e of events){tick(e.t);
   if(e.type==='create')st[e.id]='open';
@@ -64,11 +73,13 @@ function stats(){
   else if(e.type==='hook'){if(st[e.id]!=='claimed'){eng[e.driver]=(eng[e.driver]||0)+1;own[e.id]=e.driver}st[e.id]='claimed'}
   else if(e.type==='release'||e.type==='close'){if(st[e.id]==='claimed'&&own[e.id])eng[own[e.id]]--;if(e.type==='release')st[e.id]='open';else delete st[e.id];delete own[e.id]}
   else if(e.type==='online')on[e.driver]=true;else if(e.type==='offline')on[e.driver]=false;tick(e.t)}
- tick(Date.now());
+ tick(Date.now());for(const d in idleNow)if(idleNow[d]){const x=D(d);x.longestIdleMs=Math.max(x.longestIdleMs,Date.now()-idleStart[d])}
  return {now:Date.now(),open:active().length,
   scouts:Object.values(sc).map(s=>({name:s.name,marks:s.marks,open:s.open,towed:s.towed,dropped:s.dropped,lost:s.lost,wot:s.wot,grabbed:s.grab.length,avgGrabMs:avg(s.grab),medGrabMs:med(s.grab),avgLostMarkMs:avg(s.lostMark),avgLostClaimMs:avg(s.lostClaim)})),
-  drivers:Object.values(dr).map(d=>({...d,online:!!online[d.name],avgIdleMs:d.idleSpells?Math.round(d.idleMs/d.idleSpells):null})),
+  drivers:Object.values(dr).map(d=>({...d,online:!!online[d.name],longestIdleMs:d.longestIdleMs>60000?d.longestIdleMs:null,idleNow:!!idleNow[d.name]&&online[d.name]>0})),
   lost:markers.filter(m=>m.status==='lost'||m.status==='gone').slice(-50).reverse().map(m=>({scout:m.scout,driver:m.closedBy,createdAt:m.createdAt,markToCloseMs:m.markToCloseMs??(m.closedAt-m.createdAt),claimToCloseMs:m.claimToCloseMs??null,grabMs:m.grabMs??null,notes:m.notes}))}}
+app.get('/api/marks',(q,r)=>r.json([...markers].sort((a,b)=>b.createdAt-a.createdAt)));
+app.get('/api/sessions',(q,r)=>r.json([...sessions].reverse().slice(0,2000)));
 app.get('/api/stats',(q,r)=>r.json(stats()));
 app.use((e,q,r,n)=>r.status(400).json({error:e.message}));
 server.listen(PORT,'0.0.0.0',()=>console.log('Tow Scout on http://localhost:'+PORT));

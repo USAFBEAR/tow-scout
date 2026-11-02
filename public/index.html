@@ -5,7 +5,7 @@
 <button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
 <div id="main"><div id="map"></div>
 <aside id="side"><h3>Open spots (<span id="count">0</span>)</h3><div id="list"></div></aside></div>
-<div id="mgr" class="hidden"><div class="row" style="margin:0 0 6px"><h2 style="flex:1;margin:0">Manager dashboard</h2><button id="mgrref">↻ Refresh</button></div><div id="mgrbody">Loading…</div></div>
+<div id="mgr" class="hidden"><div class="row" style="margin:0 0 6px"><h2 style="flex:1;margin:0">Manager dashboard</h2><button id="mgrref">↻ Refresh</button></div><div id="mtabs" class="row" style="margin:0 0 8px"><button data-t="stats" class="on" onclick="mtab('stats')">📊 Stats</button><button data-t="marks" onclick="mtab('marks')">🚩 Marks</button><button data-t="sess" onclick="mtab('sess')">🕒 Logins</button></div><div id="mgrbody">Loading…</div><div id="mmarks" class="hidden"></div><div id="mdetail" class="hidden"></div><div id="msess" class="hidden"></div></div>
 <div id="hint"></div>
 <div id="login" class="modal"><div class="card"><h2>Welcome</h2>
 <input id="name" placeholder="Your display name"><div class="row">

@@ -5,3 +5,4 @@ data/markers.json
 *.log
 .DS_Store
 data/events.json
+data/sessions.json

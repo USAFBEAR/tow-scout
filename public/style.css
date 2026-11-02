@@ -27,3 +27,4 @@ button.manager{background:#27ae60}button.wot{background:#7f8c8d}.tag.manager{bac
 .sc{background:#1f252d;border-radius:10px;padding:10px;margin-bottom:8px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:6px}
 .g span{background:#161a20;border-radius:8px;padding:6px;font-size:12px;color:#aaa}.g b{display:block;font-size:18px;color:#eee}
 button.drop{background:#2d9cdb}
+#mtabs button.on{background:#27ae60}.g span.warn{background:#5a2a1a}.tl{width:100%;border-collapse:collapse;margin:6px 0}.tl td{padding:5px;border-bottom:1px solid #333;font-size:14px;vertical-align:top}.sc{cursor:pointer}

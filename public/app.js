@@ -67,18 +67,43 @@ sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id
 
 // manager
 const fm=ms=>{if(ms==null)return '—';const s=Math.round(ms/1000);if(s<60)return s+'s';const m=Math.round(s/60);if(m<60)return m+'m';return (m/60).toFixed(1)+'h'};
-let stT;sock.on('stats:changed',()=>{if(user?.role==='manager'){clearTimeout(stT);stT=setTimeout(loadStats,500)}});
+let stT;sock.on('stats:changed',()=>{if(user?.role==='manager'){clearTimeout(stT);stT=setTimeout(()=>{const t=document.querySelector('#mtabs .on')?.dataset.t;if(t==='stats')loadStats();if(t==='sess')loadSess();if(t==='marks'&&$('#mdetail').classList.contains('hidden'))loadMarks()},500)}});
 setInterval(()=>{if(user?.role==='manager')loadStats()},30000);
 async function loadStats(){const s=await (await fetch('/api/stats')).json();
  const d=s.drivers.sort((a,b)=>b.secured-a.secured),c=s.scouts.sort((a,b)=>b.marks-a.marks);
  $('#mgrbody').innerHTML=`<p><small>Open marks now: ${s.open} · updated ${new Date(s.now).toLocaleTimeString()}</small></p>
  <h3>🚚 Drivers</h3>${d.map(x=>`<div class="sc"><b>${esc(x.name)}</b> ${x.online?'🟢':'⚪'}<div class="g">
  <span>Tows secured<b>${x.secured}</b></span><span>Dropped (paid/legal)<b>${x.dropped}</b></span><span>Hooked now<b>${x.hooked}</b></span><span>In route<b>${x.enroute}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span>
- <span>Idle w/ marks listed<b>${fm(x.idleMs)}</b></span><span>Avg idle stretch<b>${fm(x.avgIdleMs)}</b></span><span>Engaged<b>${fm(x.engagedMs)}</b></span><span>Online<b>${fm(x.onlineMs)}</b></span>
- <span>Idle %<b>${x.onlineMs?Math.round(100*x.idleMs/x.onlineMs)+'%':'—'}</b></span></div></div>`).join('')||'<small>No driver activity yet</small>'}
+ <span class="${x.longestIdleMs?'warn':''}">Longest idle w/ mark available (&gt;1m)<b>${fm(x.longestIdleMs)}</b></span><span>Idle now<b>${x.idleNow?'⚠️ yes':'no'}</b></span><span>Engaged<b>${fm(x.engagedMs)}</b></span><span>Online<b>${fm(x.onlineMs)}</b></span></div></div>`).join('')||'<small>No driver activity yet</small>'}
  <h3>🔭 Scouts</h3>${c.map(x=>`<div class="sc"><b>${esc(x.name)}</b><div class="g">
  <span>Marks<b>${x.marks}</b></span><span>Secured (towed)<b>${x.towed}</b></span><span>Dropped<b>${x.dropped}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span><span>Open<b>${x.open}</b></span>
  <span>Tow rate<b>${x.marks?Math.round(100*x.towed/x.marks)+'%':'—'}</b></span><span>Avg grab<b>${fm(x.avgGrabMs)}</b></span><span>Median grab<b>${fm(x.medGrabMs)}</b></span>
  <span>Lost: mark→lost<b>${fm(x.avgLostMarkMs)}</b></span><span>Lost: claim→lost<b>${fm(x.avgLostClaimMs)}</b></span></div></div>`).join('')||'<small>No marks yet</small>'}
  <h3>❌ Recent lost marks</h3>${s.lost.map(l=>`<div class="sc"><small>${new Date(l.createdAt).toLocaleString()} · scout ${esc(l.scout)} · driver ${esc(l.driver)}</small><br>Mark→lost <b>${fm(l.markToCloseMs)}</b> · grab <b>${fm(l.grabMs)}</b> · claim→lost <b>${fm(l.claimToCloseMs)}</b>${l.notes?'<br><small>'+esc(l.notes)+'</small>':''}</div>`).join('')||'<small>None</small>'}`}
-$('#mgrref').onclick=loadStats;
+$('#mgrref').onclick=()=>mtab(document.querySelector('#mtabs .on')?.dataset.t||'stats');
+
+// manager tabs: marks timeline + sessions
+const tm=t=>t?new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'—',dt=t=>new Date(t).toLocaleDateString();
+const OUT={secured:'🏁 SECURED',dropped:'💵 DROPPED',lost:'❌ LOST',wot:'⚖️ WOT',taken:'🏁 SECURED',gone:'❌ LOST',open:'🔴 Open',enroute:'🟡 In route',hooked:'🟣 Hooked'};
+let allMarks=[];window.mtab=async t=>{document.querySelectorAll('#mtabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+ ['mgrbody','mmarks','msess','mdetail'].forEach(i=>$('#'+i).classList.toggle('hidden',i!==({stats:'mgrbody',marks:'mmarks',sess:'msess'}[t])));
+ if(t==='stats')loadStats();if(t==='marks')loadMarks();if(t==='sess')loadSess()};
+async function loadMarks(){allMarks=await (await fetch('/api/marks')).json();let day='';
+ $('#mmarks').innerHTML=allMarks.map(m=>{const d=dt(m.createdAt),h=d!==day?`<h3>${day=d}</h3>`:'';
+  return h+`<div class="sc" onclick="mdet('${m.id}')"><b>${OUT[m.status]||m.status}</b> · ${tm(m.createdAt)} · ${esc(m.scout)}${m.assignedDriver?' → '+esc(m.assignedDriver):''} ${m.photos.length?'📷'+m.photos.length:''}<br><small>${m.grabMs!=null?'WTF '+fm(m.grabMs):'not grabbed'}${m.notes?' · '+esc(m.notes.slice(0,50)):''}</small></div>`}).join('')||'<small>No marks yet</small>'}
+window.mdet=id=>{const m=allMarks.find(x=>x.id===id);if(!m)return;const end=m.securedAt||m.droppedAt||m.closedAt;
+ const row=(k,v)=>v?`<tr><td>${k}</td><td>${v}</td></tr>`:'';
+ $('#mdetail').innerHTML=`<button onclick="mtab('marks')">← All marks</button><h3>${OUT[m.status]||m.status}</h3><table class="tl">
+ ${row('Marked',tm(m.createdAt)+' '+dt(m.createdAt)+' by '+esc(m.scout))}
+ ${row('Grabbed',m.firstClaimedAt&&`${tm(m.firstClaimedAt)} — <b>${fm(m.grabMs)} WTF</b> by ${esc(m.assignedDriver)}`)}
+ ${row('In route',m.enrouteAt&&m.enrouteAt!==m.firstClaimedAt?tm(m.enrouteAt):'')}
+ ${row('Picked up / Hooked',m.hookedAt&&`${tm(m.hookedAt)}${m.firstClaimedAt?' ('+fm(m.hookedAt-m.firstClaimedAt)+' after grab)':''}`)}
+ ${row(OUT[m.closeReason]||'',m.closedAt&&`${tm(end)} by ${esc(m.closedBy)} (${fm(m.closedAt-m.createdAt)} after mark)`)}
+ </table>${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${m.photos.map(p=>`<img src="${p}" onclick="lb('${p}')">`).join('')}</div>
+ <p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Location</a></p>`;
+ $('#mmarks').classList.add('hidden');$('#mdetail').classList.remove('hidden');$('#mgr').scrollTop=0};
+async function loadSess(){const a=await (await fetch('/api/sessions')).json(),by={};
+ a.forEach(x=>{const k=dt(x.start);(by[k]??={})[x.role+'|'+x.name]??=[];by[k][x.role+'|'+x.name].push(x)});
+ $('#msess').innerHTML=Object.entries(by).map(([d,ppl])=>`<h3>${d}</h3>`+Object.entries(ppl).map(([k,l])=>{const [r,n]=k.split('|'),tot=l.reduce((s,x)=>s+((x.end||Date.now())-x.start),0);
+  return `<div class="sc"><b>${esc(n)}</b><span class="tag ${r}">${r}</span> · ${l.length} login${l.length>1?'s':''} · ${fm(tot)} total${r==='driver'&&l.length>3?' ⚠️':''}
+  <table class="tl">${l.map(x=>`<tr><td>${tm(x.start)}</td><td>→ ${x.end?tm(x.end):'🟢 online'}</td><td>${fm((x.end||Date.now())-x.start)}${x.note?' <small>('+x.note+')</small>':''}</td></tr>`).join('')}</table></div>`}).join('')).join('')||'<small>No sessions yet</small>'}
