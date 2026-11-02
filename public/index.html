@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tow Scout</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css"></head><body>
+<header><b>🚩 Tow Scout</b><span id="who"></span>
+<button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
+<div id="main"><div id="map"></div>
+<aside id="side"><h3>Open spots (<span id="count">0</span>)</h3><div id="list"></div></aside></div>
+<div id="hint"></div>
+<div id="login" class="modal"><div class="card"><h2>Welcome</h2>
+<input id="name" placeholder="Your display name"><div class="row">
+<button data-role="scout" class="scout">I'm a Scout</button><button data-role="driver" class="driver">I'm a Tow Driver</button></div></div></div>
+<div id="form" class="modal hidden"><div class="card"><h2>Report vehicle</h2><p id="loc"></p>
+<textarea id="notes" placeholder="Notes (plate, color, make…) optional"></textarea>
+<label class="file">📷 Add photos (up to 5)<input id="photos" type="file" accept="image/*" multiple></label>
+<div id="previews"></div><div class="row"><button id="cancel">Cancel</button><button id="submit" class="driver">Send to drivers</button></div></div></div>
+<div id="notifs" class="modal hidden"><div class="card"><h2>Alerts</h2><div id="nlist"></div>
+<div class="row"><button id="nclear">Clear</button><button id="nclose">Close</button></div></div></div>
+<div id="lightbox" class="modal hidden"><img></div>
+<div id="toasts"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/socket.io/socket.io.js"></script><script src="app.js"></script>
+</body></html>
