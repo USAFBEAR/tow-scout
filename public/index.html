@@ -5,10 +5,11 @@
 <button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
 <div id="main"><div id="map"></div>
 <aside id="side"><h3>Open spots (<span id="count">0</span>)</h3><div id="list"></div></aside></div>
+<div id="mgr" class="hidden"><div class="row" style="margin:0 0 6px"><h2 style="flex:1;margin:0">Manager dashboard</h2><button id="mgrref">↻ Refresh</button></div><div id="mgrbody">Loading…</div></div>
 <div id="hint"></div>
 <div id="login" class="modal"><div class="card"><h2>Welcome</h2>
 <input id="name" placeholder="Your display name"><div class="row">
-<button data-role="scout" class="scout">I'm a Scout</button><button data-role="driver" class="driver">I'm a Tow Driver</button></div></div></div>
+<button data-role="scout" class="scout">I'm a Scout</button><button data-role="driver" class="driver">I'm a Tow Driver</button></div><div class="row"><button data-role="manager" class="manager">I'm a Manager</button></div></div></div>
 <div id="form" class="modal hidden"><div class="card"><h2>Report vehicle</h2><p id="loc"></p>
 <textarea id="notes" placeholder="Notes (plate, color, make…) optional"></textarea>
 <label class="file">📷 Add photos (up to 5)<input id="photos" type="file" accept="image/*" multiple></label>

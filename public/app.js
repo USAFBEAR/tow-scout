@@ -7,30 +7,32 @@ const markers={},layers={};let prov=null,notifs=JSON.parse(localStorage.getItem(
 const gmaps=m=>`https://www.google.com/maps?q=${m.lat},${m.lng}`;
 function toast(t,cls='',onclick){const d=document.createElement('div');d.className='toast '+cls;d.textContent=t;d.onclick=()=>{onclick&&onclick();d.remove()};$('#toasts').append(d);setTimeout(()=>d.remove(),onclick?12000:4000)}
 function setUser(u){user=u;localStorage.setItem('ts_user',JSON.stringify(u));document.body.className=u.role;
- $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${u.role==='scout'?'Scout':'Tow Driver'}</span>`;
+ $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${{scout:'Scout',driver:'Tow Driver',manager:'Manager'}[u.role]}</span>`;
  $('#bell').classList.toggle('hidden',u.role!=='driver');$('#hint').classList.toggle('hidden',u.role!=='scout');
- $('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');renderAll();renderNotifs()}
+ $('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');$('#mgr').classList.toggle('hidden',u.role!=='manager');$('#main').classList.toggle('hidden',u.role==='manager');if(u.role==='manager')setTimeout(loadStats,0);else setTimeout(()=>map.invalidateSize(),50);try{sock.emit('hello',u)}catch{}renderAll();renderNotifs()}
 document.querySelectorAll('#login [data-role]').forEach(b=>b.onclick=()=>{const n=$('#name').value.trim();if(!n)return $('#name').focus();setUser({name:n,role:b.dataset.role})});
 $('#switch').onclick=()=>{$('#name').value=user?.name||'';$('#login').classList.remove('hidden')};
 if(user)setUser(user);else $('#login').classList.remove('hidden');
 navigator.geolocation?.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],15);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#56ccf2'}).addTo(map).bindTooltip('You')},()=>{},{timeout:8000});
 function popup(m){const g=m.photos.map(p=>`<img src="${p}" onclick="lb('${p}')">`).join('');
- let a='';if(user?.role==='driver'){
-  if(m.status==='open')a=`<button class="driver" onclick="act('${m.id}','enroute')">🚚 I'm in route</button>`;
-  else if(m.enrouteBy===user.name)a=`<button onclick="act('${m.id}','release')">Release</button>`;
-  else a=`<button class="driver" onclick="act('${m.id}','enroute')">🚚 I'm in route</button>`;
-  a+=`<br><button class="ok" onclick="act('${m.id}','taken')">✅ Taken</button><button class="danger" onclick="act('${m.id}','gone')">❌ No longer there</button>`}
- return `<div class="pop"><b>${m.status==='enroute'?'🟡 In route: '+esc(m.enrouteBy):'🔴 Open'}</b><br><small>By ${esc(m.scout)} · ${new Date(m.createdAt).toLocaleString()}</small>
+ let a='';if(user?.role==='driver'){const me=m.enrouteBy===user.name;
+  if(m.status==='open')a=`<button class="driver" onclick="act('${m.id}','enroute')">🚚 In route</button><button onclick="act('${m.id}','hooked')">🪝 Hooked</button>`;
+  else if(me&&m.status==='enroute')a=`<button onclick="act('${m.id}','hooked')">🪝 Hooked</button><button onclick="act('${m.id}','release')">Release</button>`;
+  else if(me&&m.status==='hooked')a=`<button class="ok" onclick="act('${m.id}','dropped')">✅ Dropped</button><button onclick="act('${m.id}','release')">Release</button>`;
+  if(m.status==='open'||me)a+=`<br><button class="danger" onclick="act('${m.id}','lost')">❌ Lost (not there)</button><button class="wot" onclick="act('${m.id}','wot')">⚖️ WOT (legal)</button>`;
+  else a=`<small>Claimed by ${esc(m.enrouteBy)}</small>`}
+ return `<div class="pop"><b>${lbl(m)}</b><br><small>By ${esc(m.scout)} · ${new Date(m.createdAt).toLocaleString()}</small>
  ${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${g}</div><p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Open in Google Maps</a></p>${a}</div>`}
-function renderMarker(m){markers[m.id]=m;const c=m.status==='enroute'?'#f2c94c':'#e74c3c';
+const lbl=m=>m.status==='enroute'?'🟡 In route: '+esc(m.enrouteBy):m.status==='hooked'?'🟣 Hooked: '+esc(m.enrouteBy):'🔴 Open';
+function renderMarker(m){markers[m.id]=m;const c={enroute:'#f2c94c',hooked:'#9b51e0'}[m.status]||'#e74c3c';
  if(layers[m.id]){layers[m.id].setIcon(icon(c));layers[m.id].setPopupContent(popup(m))}else layers[m.id]=L.marker([m.lat,m.lng],{icon:icon(c)}).addTo(map).bindPopup(popup(m),{maxWidth:280});renderList()}
 function removeMarker(id){if(layers[id]){map.removeLayer(layers[id]);delete layers[id]}delete markers[id];renderList()}
 function renderAll(){Object.values(markers).forEach(renderMarker);renderList()}
 function renderList(){const a=Object.values(markers).sort((x,y)=>y.createdAt-x.createdAt);$('#count').textContent=a.length;
- $('#list').innerHTML=a.map(m=>`<div class="item ${m.status}" onclick="focusM('${m.id}')"><b>${m.status==='enroute'?'🟡 In route ('+esc(m.enrouteBy)+')':'🔴 Open'}</b> ${m.photos.length?'📷'+m.photos.length:''}<br>${esc(m.notes||'No notes')}<br><small>${esc(m.scout)} · ${new Date(m.createdAt).toLocaleTimeString()}</small></div>`).join('')||'<small>No open spots</small>'}
+ $('#list').innerHTML=a.map(m=>`<div class="item ${m.status}" onclick="focusM('${m.id}')"><b>${lbl(m)}</b> ${m.photos.length?'📷'+m.photos.length:''}<br>${esc(m.notes||'No notes')}<br><small>${esc(m.scout)} · ${new Date(m.createdAt).toLocaleTimeString()}</small></div>`).join('')||'<small>No open spots</small>'}
 window.focusM=id=>{const m=markers[id];if(!m)return toast('That spot was already cleared','info');map.setView([m.lat,m.lng],17);layers[id].openPopup()};
 window.lb=src=>{$('#lightbox img').src=src;$('#lightbox').classList.remove('hidden')};$('#lightbox').onclick=()=>$('#lightbox').classList.add('hidden');
-window.act=async(id,a)=>{const url=a==='taken'||a==='gone'?`/api/markers/${id}/close`:`/api/markers/${id}/${a}`;
+window.act=async(id,a)=>{const url=['dropped','lost','wot'].includes(a)?`/api/markers/${id}/close`:`/api/markers/${id}/${a}`;
  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver:user.name,reason:a})});const j=await r.json();
  if(!r.ok)return alert(j.error);if(a==='enroute')toast('You are in route. Others will see this spot is claimed.','info')};
 // scout placing
@@ -58,7 +60,25 @@ function alertDriver(m){const text=`New vehicle by ${m.scout}${m.notes?': '+m.no
 document.addEventListener('click',()=>{if(user?.role==='driver'&&'Notification'in window&&Notification.permission==='default')Notification.requestPermission()},{once:true});
 // sync
 const sock=io();
-sock.on('connect',async()=>{const a=await (await fetch('/api/markers')).json();Object.keys(markers).forEach(id=>{if(!a.find(m=>m.id===id))removeMarker(id)});a.forEach(renderMarker)});
+sock.on('connect',async()=>{if(user)sock.emit('hello',user);const a=await (await fetch('/api/markers')).json();Object.keys(markers).forEach(id=>{if(!a.find(m=>m.id===id))removeMarker(id)});a.forEach(renderMarker)});
 sock.on('marker:new',m=>{renderMarker(m);if(user?.role==='driver')alertDriver(m)});
 sock.on('marker:update',m=>{renderMarker(m);if(layers[m.id]?.isPopupOpen())layers[m.id].setPopupContent(popup(m))});
-sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was)toast(`Spot ${status==='taken'?'taken':'cleared (no longer there)'} by ${by}`,'info')});
+sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was)toast(`Spot ${{dropped:'towed (dropped)',lost:'lost (not there)',wot:'WOT (legal)'}[status]||status} by ${by}`,'info')});
+
+// manager
+const fm=ms=>{if(ms==null)return '—';const s=Math.round(ms/1000);if(s<60)return s+'s';const m=Math.round(s/60);if(m<60)return m+'m';return (m/60).toFixed(1)+'h'};
+let stT;sock.on('stats:changed',()=>{if(user?.role==='manager'){clearTimeout(stT);stT=setTimeout(loadStats,500)}});
+setInterval(()=>{if(user?.role==='manager')loadStats()},30000);
+async function loadStats(){const s=await (await fetch('/api/stats')).json();
+ const d=s.drivers.sort((a,b)=>b.dropped-a.dropped),c=s.scouts.sort((a,b)=>b.marks-a.marks);
+ $('#mgrbody').innerHTML=`<p><small>Open marks now: ${s.open} · updated ${new Date(s.now).toLocaleTimeString()}</small></p>
+ <h3>🚚 Drivers</h3>${d.map(x=>`<div class="sc"><b>${esc(x.name)}</b> ${x.online?'🟢':'⚪'}<div class="g">
+ <span>Tows (dropped)<b>${x.dropped}</b></span><span>Hooked now<b>${x.hooked}</b></span><span>In route<b>${x.enroute}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span>
+ <span>Idle w/ marks listed<b>${fm(x.idleMs)}</b></span><span>Avg idle stretch<b>${fm(x.avgIdleMs)}</b></span><span>Engaged<b>${fm(x.engagedMs)}</b></span><span>Online<b>${fm(x.onlineMs)}</b></span>
+ <span>Idle %<b>${x.onlineMs?Math.round(100*x.idleMs/x.onlineMs)+'%':'—'}</b></span></div></div>`).join('')||'<small>No driver activity yet</small>'}
+ <h3>🔭 Scouts</h3>${c.map(x=>`<div class="sc"><b>${esc(x.name)}</b><div class="g">
+ <span>Marks<b>${x.marks}</b></span><span>Towed<b>${x.towed}</b></span><span>Lost<b>${x.lost}</b></span><span>WOT<b>${x.wot}</b></span><span>Open<b>${x.open}</b></span>
+ <span>Tow rate<b>${x.marks?Math.round(100*x.towed/x.marks)+'%':'—'}</b></span><span>Avg grab<b>${fm(x.avgGrabMs)}</b></span><span>Median grab<b>${fm(x.medGrabMs)}</b></span>
+ <span>Lost: mark→lost<b>${fm(x.avgLostMarkMs)}</b></span><span>Lost: claim→lost<b>${fm(x.avgLostClaimMs)}</b></span></div></div>`).join('')||'<small>No marks yet</small>'}
+ <h3>❌ Recent lost marks</h3>${s.lost.map(l=>`<div class="sc"><small>${new Date(l.createdAt).toLocaleString()} · scout ${esc(l.scout)} · driver ${esc(l.driver)}</small><br>Mark→lost <b>${fm(l.markToCloseMs)}</b> · grab <b>${fm(l.grabMs)}</b> · claim→lost <b>${fm(l.claimToCloseMs)}</b>${l.notes?'<br><small>'+esc(l.notes)+'</small>':''}</div>`).join('')||'<small>None</small>'}`}
+$('#mgrref').onclick=loadStats;

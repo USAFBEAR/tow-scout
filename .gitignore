@@ -4,3 +4,4 @@ uploads/*
 data/markers.json
 *.log
 .DS_Store
+data/events.json
