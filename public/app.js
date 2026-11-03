@@ -116,7 +116,7 @@ async function loadSess(){const a=await (await fetch('/api/sessions')).json(),by
 const drvL={};function clearDrv(){for(const k in drvL){map.removeLayer(drvL[k]);delete drvL[k]}}
 const truck=n=>L.divIcon({className:'',html:`<div class="truck">🚚<span>${esc(n)}</span></div>`,iconSize:[30,30],iconAnchor:[15,15]});
 sock.on('presence',p=>{if(!['dispatch','manager'].includes(user?.role))return;
- $('#dbd').textContent=p.drivers;$('#dbs').textContent=p.scouts;$('#legend').innerHTML=`🔭 ${p.scouts} scout${p.scouts==1?'':'s'} · 🚚 ${p.drivers} driver${p.drivers==1?'':'s'} online`;
+ $('#dbd').textContent=p.drivers;$('#dbb').textContent=p.busy??0;$('#dbs').textContent=p.scouts;$('#legend').innerHTML=`🔭 ${p.scouts} scout${p.scouts==1?'':'s'} · 🚚 ${p.drivers} driver${p.drivers==1?'':'s'} online`;
  if(user.role!=='dispatch')return;const seen={};
  p.locs.forEach(l=>{seen[l.name]=1;const tip=`${esc(l.name)} · ${new Date(l.t).toLocaleTimeString()}`;
   if(drvL[l.name])drvL[l.name].setLatLng([l.lat,l.lng]).setTooltipContent(tip);else drvL[l.name]=L.marker([l.lat,l.lng],{icon:truck(l.name),zIndexOffset:1000}).addTo(map).bindTooltip(tip)});

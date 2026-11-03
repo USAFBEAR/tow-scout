@@ -10,7 +10,7 @@ const upload=multer({storage:multer.diskStorage({destination:UP,filename:(q,f,cb
  limits:{files:5,fileSize:15*1024*1024},fileFilter:(q,f,cb)=>cb(null,/^image\//.test(f.mimetype))});
 const EV=path.join(__dirname,'data','events.json');
 let events=fs.existsSync(EV)?JSON.parse(fs.readFileSync(EV)):[];
-const logE=(type,o={})=>{events.push({t:Date.now(),type,...o});fs.writeFileSync(EV,JSON.stringify(events));io.emit('stats:changed')};
+const logE=(type,o={})=>{events.push({t:Date.now(),type,...o});fs.writeFileSync(EV,JSON.stringify(events));io.emit('stats:changed');try{pushP()}catch{}};
 const ACTIVE=['open','enroute','hooked'];
 const active=()=>markers.filter(m=>ACTIVE.includes(m.status));
 const find=(q,r)=>{const m=markers.find(x=>x.id===q.params.id);if(!m||!ACTIVE.includes(m.status)){r.status(404).json({error:'Marker no longer active'});return null}return m};
@@ -64,7 +64,8 @@ const saveS=()=>{fs.writeFileSync(SE,JSON.stringify(sessions.slice(-5000)));io.e
 {const o={};for(const e of events){if(e.type==='online')o[e.driver]=1;if(e.type==='offline')delete o[e.driver]}for(const d in o)events.push({t:now0,type:'offline',driver:d})}
 const locs={};
 const presence=()=>{const on=sessions.filter(x=>!x.end),c=r=>new Set(on.filter(x=>x.role===r).map(x=>x.name)).size;
- return {scouts:c('scout'),drivers:c('driver'),dispatch:c('dispatch'),locs:Object.entries(locs).filter(([n])=>online[n]>0).map(([name,l])=>({name,...l}))}};
+ const on2=new Set(on.filter(x=>x.role==='driver').map(x=>x.name));
+ return {busy:new Set(markers.filter(m=>(m.status==='enroute'||m.status==='hooked')&&on2.has(m.enrouteBy)).map(m=>m.enrouteBy)).size,scouts:c('scout'),drivers:c('driver'),dispatch:c('dispatch'),locs:Object.entries(locs).filter(([n])=>online[n]>0).map(([name,l])=>({name,...l}))}};
 const pushP=()=>io.to('ops').emit('presence',presence());
 app.get('/api/presence',(q,r)=>r.json(presence()));
 function bye(s){if(s.sess){s.sess.end=Date.now();s.sess=null;saveS()}if(s.drv){if(--online[s.drv]===0)logE('offline',{driver:s.drv});s.drv=null}}

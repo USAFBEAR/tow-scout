@@ -37,3 +37,4 @@ body.dispatch #side{width:340px}@media(max-width:700px){body.dispatch #side{heig
 body.manager #dbox{border-color:#27ae60}#dbox div{text-align:center;min-width:78px}#dbox b{display:block;font-size:28px;line-height:1}#dbox span{font-size:11px;color:#bbb}
 body.dispatch #legend,body.manager #legend{display:none}body.dispatch #toasts,body.manager #toasts{top:auto;bottom:12px}
 body.manager #mgr{padding-top:90px}
+#dbox b{font-size:22px;white-space:nowrap}#dbox i{font-style:normal}#dbox .lab{display:block;font-weight:800;font-size:13px;color:#eee}#dbox div+div{border-left:1px solid #444;padding-left:6px}
