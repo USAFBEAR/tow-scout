@@ -1,4 +1,4 @@
-const DEF=[29.4477,-82.6423];let user=JSON.parse(localStorage.getItem('ts_user')||'null');
+const allM={};const DEF=[29.4477,-82.6423];let user=JSON.parse(localStorage.getItem('ts_user')||'null');
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const map=L.map('map').setView(DEF,14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
@@ -9,7 +9,7 @@ function toast(t,cls='',onclick){const d=document.createElement('div');d.classNa
 function setUser(u){user=u;localStorage.setItem('ts_user',JSON.stringify(u));document.body.className=u.role;
  $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${{scout:'Scout',driver:'Tow Driver',manager:'Manager',dispatch:'Dispatch'}[u.role]}</span>`;
  $('#bell').classList.toggle('hidden',u.role!=='driver');$('#gng').classList.toggle('hidden',u.role!=='driver');$('#disp').classList.toggle('hidden',u.role!=='dispatch');$('#legend').classList.toggle('hidden',!['dispatch','manager'].includes(u.role));setTimeout(()=>{if(u.role!=='dispatch')clearDrv();if(u.role==='dispatch')map.setView(map.getCenter(),11);startLoc();try{sock.emit('hello',u)}catch{}},0);$('#hint').classList.toggle('hidden',u.role!=='scout');
- $('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');$('#mgr').classList.toggle('hidden',u.role!=='manager');$('#main').classList.toggle('hidden',u.role==='manager');if(u.role==='manager')setTimeout(loadStats,0);else setTimeout(()=>map.invalidateSize(),50);try{sock.emit('hello',u)}catch{}renderAll();renderNotifs()}
+ $('#ltitle').textContent=u.role==='scout'?'My open marks':u.role==='driver'?'Available & my tows':'Open spots';$('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');$('#mgr').classList.toggle('hidden',u.role!=='manager');$('#main').classList.toggle('hidden',u.role==='manager');if(u.role==='manager')setTimeout(loadStats,0);else setTimeout(()=>map.invalidateSize(),50);try{sock.emit('hello',u)}catch{}renderAll();renderNotifs()}
 document.querySelectorAll('#login [data-role]').forEach(b=>b.onclick=()=>{const n=$('#name').value.trim();if(!n)return $('#name').focus();setUser({name:n,role:b.dataset.role})});
 $('#switch').onclick=()=>{$('#name').value=user?.name||'';$('#login').classList.remove('hidden')};
 if(user)setUser(user);else $('#login').classList.remove('hidden');
@@ -20,14 +20,17 @@ function popup(m){const g=m.photos.map(p=>`<img src="${p}" onclick="lb('${p}')">
   else if(me&&m.status==='enroute')a=`<button onclick="act('${m.id}','hooked')">🪝 Hooked</button><button onclick="act('${m.id}','release')">Release</button>`;
   else if(me&&m.status==='hooked')a=`<button class="ok" onclick="act('${m.id}','secured')">🏁 Secured (yard)</button><button class="drop" onclick="act('${m.id}','dropped')">💵 Dropped (paid/legal)</button><button onclick="act('${m.id}','release')">Release</button>`;
   if(m.status==='open'||me){if(m.status!=='hooked')a+=`<br><button class="danger" onclick="act('${m.id}','lost')">❌ Lost (not there)</button><button class="wot" onclick="act('${m.id}','wot')">⚖️ WOT (legal)</button>`}
-  else a=`<small>Claimed by ${esc(m.enrouteBy)}</small>`}
+  else a=`<small>Claimed by another driver</small>`}
  return `<div class="pop"><b>${lbl(m)}</b><br><small>By ${esc(m.scout)} · ${new Date(m.createdAt).toLocaleString()}</small>
  ${info}${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${g}</div><p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Open in Google Maps</a></p>${a}</div>`}
-const lbl=m=>m.status==='enroute'?'🟡 In route: '+esc(m.enrouteBy):m.status==='hooked'?'🟣 Hooked: '+esc(m.enrouteBy):'🔴 Open';
-function renderMarker(m){markers[m.id]=m;const c={enroute:'#f2c94c',hooked:'#9b51e0'}[m.status]||'#e74c3c';
+const who=m=>user?.role==='dispatch'?': '+esc(m.enrouteBy):m.enrouteBy===user?.name&&user?.role==='driver'?' (you)':'';
+const lbl=m=>m.status==='enroute'?'🟡 In route'+who(m):m.status==='hooked'?'🟣 Hooked'+who(m):'🔴 Open';
+const vis=m=>user?.role==='scout'?m.scout===user.name&&m.source!=='grabgo':user?.role==='driver'?!m.enrouteBy||m.enrouteBy===user.name:true;
+function renderMarker(m){allM[m.id]=m;if(!vis(m)){if(layers[m.id]||markers[m.id])hideM(m.id);return}markers[m.id]=m;const c={enroute:'#f2c94c',hooked:'#9b51e0'}[m.status]||'#e74c3c';
  if(layers[m.id]){layers[m.id].setIcon(icon(c));layers[m.id].setPopupContent(popup(m))}else layers[m.id]=L.marker([m.lat,m.lng],{icon:icon(c)}).addTo(map).bindPopup(popup(m),{maxWidth:280});renderList()}
-function removeMarker(id){if(layers[id]){map.removeLayer(layers[id]);delete layers[id]}delete markers[id];renderList()}
-function renderAll(){Object.values(markers).forEach(renderMarker);renderList()}
+function hideM(id){if(layers[id]){map.removeLayer(layers[id]);delete layers[id]}delete markers[id];renderList()}
+function removeMarker(id){delete allM[id];if(layers[id]){map.removeLayer(layers[id]);delete layers[id]}delete markers[id];renderList()}
+function renderAll(){Object.values(allM).forEach(renderMarker);renderList()}
 function renderList(){const a=Object.values(markers).sort((x,y)=>y.createdAt-x.createdAt);$('#count').textContent=a.length;
  $('#list').innerHTML=a.map(m=>`<div class="item ${m.status}" onclick="focusM('${m.id}')"><b>${lbl(m)}</b> ${m.photos.length?'📷'+m.photos.length:''}<br>${esc(m.notes||'No notes')}<br><small>${esc(m.scout)} · ${new Date(m.createdAt).toLocaleTimeString()}</small></div>`).join('')||'<small>No open spots</small>'}
 window.focusM=id=>{const m=markers[id];if(!m)return toast('That spot was already cleared','info');map.setView([m.lat,m.lng],17);layers[id].openPopup()};
@@ -60,10 +63,10 @@ function alertDriver(m){const text=`New vehicle by ${m.scout}${m.notes?': '+m.no
 document.addEventListener('click',()=>{if(user?.role==='driver'&&'Notification'in window&&Notification.permission==='default')Notification.requestPermission()},{once:true});
 // sync
 const sock=io();
-sock.on('connect',async()=>{if(user)sock.emit('hello',user);const a=await (await fetch('/api/markers')).json();Object.keys(markers).forEach(id=>{if(!a.find(m=>m.id===id))removeMarker(id)});a.forEach(renderMarker)});
+sock.on('connect',async()=>{if(user)sock.emit('hello',user);const a=await (await fetch('/api/markers')).json();Object.keys(allM).forEach(id=>{if(!a.find(m=>m.id===id))removeMarker(id)});a.forEach(renderMarker)});
 sock.on('marker:new',m=>{renderMarker(m);if(user?.role==='driver')alertDriver(m)});
 sock.on('marker:update',m=>{renderMarker(m);if(layers[m.id]?.isPopupOpen())layers[m.id].setPopupContent(popup(m))});
-sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was)toast(`Spot ${{secured:'secured to yard',dropped:'dropped (paid/legal)',lost:'lost (not there)',wot:'WOT (legal)'}[status]||status} by ${by}`,'info')});
+sock.on('marker:remove',({id,status,by})=>{const was=markers[id];removeMarker(id);if(was&&(user?.role==='dispatch'||(user?.role==='driver'&&by===user.name)))toast(`Spot ${{secured:'secured to yard',dropped:'dropped (paid/legal)',lost:'lost (not there)',wot:'WOT (legal)'}[status]||status}${user.role==='dispatch'?' by '+by:''}`,'info')});
 
 // manager
 const fm=ms=>{if(ms==null)return '—';const s=Math.round(ms/1000);if(s<60)return s+'s';const m=Math.round(s/60);if(m<60)return m+'m';return (m/60).toFixed(1)+'h'};
