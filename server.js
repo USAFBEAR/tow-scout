@@ -26,10 +26,19 @@ app.post('/api/markers',upload.array('photos',5),(q,r)=>{
  markers.push(m);save();logE('create',{id:m.id,scout:m.scout,source:src});
  if(src==='grabgo'){logE('claim',{id:m.id,driver:m.scout});logE('hook',{id:m.id,driver:m.scout})}
  io.emit('marker:new',m);r.json(m);});
-app.get('/api/geocode',async(q,r)=>{const t=String(q.query.q||'').trim().slice(0,300);if(!t)return r.status(400).json({error:'Enter an address'});
- try{const x=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q='+encodeURIComponent(t),{headers:{'User-Agent':'TowScout/1.0 (tow-scout.onrender.com)','Accept-Language':'en'}});
-  if(!x.ok)throw new Error('geocoder HTTP '+x.status);const j=await x.json();r.json(j.map(p=>({lat:+p.lat,lng:+p.lon,label:p.display_name})))}
- catch(e){r.status(502).json({error:'Address lookup failed ('+e.message+'). Try again or tap the map.'})}});
+app.get('/api/geocode',async(q,r)=>{const g=k=>String(q.query[k]||'').trim().slice(0,150);
+ const street=g('street'),city=g('city'),state=g('state'),zip=g('zip'),free=g('q');if(!street&&!city&&!zip&&!free)return r.status(400).json({error:'Enter a street, city or zip'});
+ let lat=+q.query.lat,lng=+q.query.lng;if(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)<1){lat=29.6516;lng=-82.3248}
+ const base='https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=us&addressdetails=0&';
+ const qs=free?'q='+encodeURIComponent(free):[['street',street],['city',city],['state',state],['postalcode',zip]].filter(x=>x[1]).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+ const box=d=>`&viewbox=${lng-d},${lat+d},${lng+d},${lat-d}&bounded=1`;
+ const get=async u=>{const x=await fetch(base+u,{headers:{'User-Agent':'TowScout/1.0 (tow-scout.onrender.com)','Accept-Language':'en'}});if(!x.ok)throw new Error('geocoder HTTP '+x.status);return x.json()};
+ const km=p=>{const R=6371,dl=(p.lat-lat)*Math.PI/180,dn=(p.lng-lng)*Math.PI/180,a=Math.sin(dl/2)**2+Math.cos(lat*Math.PI/180)*Math.cos(p.lat*Math.PI/180)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(a))};
+ try{let j=[];const local=!city&&!state&&!zip;
+  if(local){for(const d of [0.3,1]){j=await get(qs+box(d));if(j.length)break}}
+  if(!j.length)j=await get(qs+'&viewbox='+`${lng-1},${lat+1},${lng+1},${lat-1}`);
+  const out=j.map(p=>({lat:+p.lat,lng:+p.lon,label:p.display_name})).map(p=>({...p,km:Math.round(km(p)*10)/10})).sort((a,b)=>a.km-b.km).slice(0,5);
+  r.json(out)}catch(e){r.status(502).json({error:'Address lookup failed ('+e.message+'). Try again or tap the map.'})}});
 app.post('/api/markers/:id/enroute',(q,r)=>{const m=find(q,r);if(!m)return;const d=(q.body.driver||'').slice(0,50);if(!mine(m,d,r))return;
  if(m.status==='open'){m.status='enroute';m.enrouteBy=d;m.assignedDriver=d;m.enrouteAt=m.claimedAt=Date.now();
   if(!m.firstClaimedAt){m.firstClaimedAt=m.claimedAt;m.grabMs=m.claimedAt-m.createdAt}save();logE('claim',{id:m.id,driver:d})}

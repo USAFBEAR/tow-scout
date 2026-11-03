@@ -5,7 +5,7 @@
 <span id="legend" class="hidden"></span><button id="gng" class="hidden ok">🪝 Grab&amp;Go</button><button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
 <div id="main"><div id="map"></div>
 <aside id="side"><div id="disp" class="hidden"><h3>📞 Dispatch a tow</h3>
-<div class="row" style="margin:0"><input id="daddr" placeholder="Address (street, city)"><button id="dfind" style="flex:0">Find</button></div>
+<input id="dstreet" placeholder="Street (e.g. 100 NW 1st Ave)" autocomplete="address-line1"><div class="addr"><input id="dcity" placeholder="City" autocomplete="address-level2"><input id="dstate" placeholder="State" maxlength="20" autocomplete="address-level1"><input id="dzip" placeholder="Zip" inputmode="numeric" maxlength="10" autocomplete="postal-code"></div><button id="dfind" style="width:100%">🔎 Find address</button><small>No city/state? Searches nearest to the map view.</small>
 <div id="dres"></div><small id="dloc">Find an address or tap the map.</small>
 <input id="dname" placeholder="Contact name (optional)"><input id="dphone" type="tel" placeholder="Phone (optional)">
 <textarea id="dnotes" placeholder="Notes: vehicle, plate, gate code…"></textarea>

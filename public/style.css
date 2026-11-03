@@ -32,3 +32,4 @@ button.dispatch{background:#9b51e0}.tag.dispatch{background:#9b51e0}body.dispatc
 #legend{font-size:13px;background:#2a313b;padding:4px 8px;border-radius:8px}#disp input,#disp textarea{width:100%;padding:9px;border-radius:8px;border:1px solid #333;background:#111;color:#eee;margin:4px 0;font-size:16px}
 .err{color:#e74c3c}.truck{font-size:22px;filter:drop-shadow(0 0 3px #000);white-space:nowrap}.truck span{font-size:11px;background:#000c;color:#fff;padding:1px 4px;border-radius:4px;margin-left:2px}
 body.dispatch #side{width:340px}@media(max-width:700px){body.dispatch #side{height:50vh}header{flex-wrap:wrap}}
+.addr{display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px}

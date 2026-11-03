@@ -137,17 +137,18 @@ $('#gng').onclick=()=>{const go=async pos=>{const notes=prompt('Grab&Go — hook
  if(lastPos&&Date.now()-lastSent<60000)return go(lastPos);
  navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>go({lat:p.coords.latitude,lng:p.coords.longitude}),()=>{const c=map.getCenter();if(confirm('No GPS fix. Use the map center instead?'))go({lat:c.lat,lng:c.lng})},{enableHighAccuracy:true,timeout:15000}):go(map.getCenter())};
 // Dispatch form
-let dpin=null;function setDisp(ll,label){if(dpin)dpin.setLatLng(ll);else dpin=L.marker(ll,{icon:icon('#2d9cdb'),draggable:true}).addTo(map).on('dragend',()=>setDisp(dpin.getLatLng()));
- if(label!==undefined)$('#daddr').value=label;$('#dloc').textContent=`📍 ${(+ll.lat).toFixed(5)}, ${(+ll.lng).toFixed(5)} (drag pin to adjust)`}
-$('#dfind').onclick=async()=>{const q=$('#daddr').value.trim();if(!q)return $('#daddr').focus();$('#dres').innerHTML='<small>Searching…</small>';
- try{const r=await fetch('/api/geocode?q='+encodeURIComponent(q)),j=await r.json();if(!r.ok)throw new Error(j.error);
-  if(!j.length){$('#dres').innerHTML='<small class="err">No match. Add city/state, or tap the map.</small>';return}
-  window._geo=j;$('#dres').innerHTML=j.map((g,i)=>`<div class="nitem" onclick="pickG(${i})">${esc(g.label)}</div>`).join('');if(j.length===1)pickG(0)}
+let dpin=null,dlabel='';const addrF=['dstreet','dcity','dstate','dzip'];function setDisp(ll,label){if(dpin)dpin.setLatLng(ll);else dpin=L.marker(ll,{icon:icon('#2d9cdb'),draggable:true}).addTo(map).on('dragend',()=>setDisp(dpin.getLatLng()));
+ if(label!==undefined)dlabel=label;$('#dloc').textContent=`📍 ${(+ll.lat).toFixed(5)}, ${(+ll.lng).toFixed(5)} (drag pin to adjust)`}
+$('#dfind').onclick=async()=>{const v=Object.fromEntries(addrF.map(i=>[i.slice(1),$('#'+i).value.trim()]));if(!v.street&&!v.city&&!v.zip)return $('#dstreet').focus();$('#dres').innerHTML='<small>Searching…</small>';
+ let c=map.getCenter();const dl=Object.values(drvL);if(map.getZoom()<8&&dl.length){const b=L.featureGroup(dl).getBounds();c=b.getCenter()}
+ try{const r=await fetch('/api/geocode?'+new URLSearchParams({...v,lat:c.lat,lng:c.lng})),j=await r.json();if(!r.ok)throw new Error(j.error);
+  if(!j.length){$('#dres').innerHTML='<small class="err">No match near the map view. Add city/state/zip, or tap the map.</small>';return}
+  window._geo=j;$('#dres').innerHTML=j.map((g,i)=>`<div class="nitem" onclick="pickG(${i})">${esc(g.label)} <small>(${g.km} km)</small></div>`).join('');if(j.length===1)pickG(0)}
  catch(e){$('#dres').innerHTML=`<small class="err">${esc(e.message)}</small>`}};
-$('#daddr').onkeydown=e=>{if(e.key==='Enter')$('#dfind').onclick()};
+addrF.forEach(i=>$('#'+i).onkeydown=e=>{if(e.key==='Enter')$('#dfind').onclick()});
 window.pickG=i=>{const g=_geo[i];setDisp({lat:g.lat,lng:g.lng},g.label);map.setView([g.lat,g.lng],15);$('#dres').innerHTML=''};
 $('#dsend').onclick=async()=>{if(!dpin)return alert('Find an address or tap the map first');const p=dpin.getLatLng(),fd=new FormData();
- [['lat',p.lat],['lng',p.lng],['address',$('#daddr').value],['contactName',$('#dname').value],['contactPhone',$('#dphone').value],['notes',$('#dnotes').value],['scout',user.name],['source','dispatch']].forEach(([k,v])=>fd.append(k,v));
+ [['lat',p.lat],['lng',p.lng],['address',dlabel||addrF.map(i=>$('#'+i).value.trim()).filter(Boolean).join(', ')],['contactName',$('#dname').value],['contactPhone',$('#dphone').value],['notes',$('#dnotes').value],['scout',user.name],['source','dispatch']].forEach(([k,v])=>fd.append(k,v));
  $('#dsend').disabled=true;try{const r=await fetch('/api/markers',{method:'POST',body:fd}),j=await r.json();if(!r.ok)throw new Error(j.error);
-  ['daddr','dname','dphone','dnotes'].forEach(i=>$('#'+i).value='');map.removeLayer(dpin);dpin=null;$('#dloc').textContent='Find an address or tap the map.';toast('Sent to all drivers ✅','info');map.setView([p.lat,p.lng],11)}
+  [...addrF,'dname','dphone','dnotes'].forEach(i=>$('#'+i).value='');dlabel='';map.removeLayer(dpin);dpin=null;$('#dloc').textContent='Find an address or tap the map.';toast('Sent to all drivers ✅','info');map.setView([p.lat,p.lng],11)}
  catch(e){alert('Failed: '+e.message)}$('#dsend').disabled=false};
