@@ -18,9 +18,18 @@ const mine=(m,d,r)=>{if(m.status!=='open'&&m.enrouteBy&&m.enrouteBy!==d){r.statu
 app.get('/api/markers',(q,r)=>r.json(active()));
 app.post('/api/markers',upload.array('photos',5),(q,r)=>{
  const lat=+q.body.lat,lng=+q.body.lng; if(!isFinite(lat)||!isFinite(lng))return r.status(400).json({error:'bad location'});
- const m={id:crypto.randomUUID(),lat,lng,notes:(q.body.notes||'').slice(0,1000),scout:(q.body.scout||'Scout').slice(0,50),
-  photos:(q.files||[]).map(f=>'/uploads/'+f.filename),status:'open',enrouteBy:null,createdAt:Date.now()};
- markers.push(m);save();io.emit('marker:new',m);logE('create',{id:m.id,scout:m.scout});r.json(m);});
+ const src=['dispatch','grabgo'].includes(q.body.source)?q.body.source:'scout',cut=(v,n)=>String(v||'').slice(0,n),now=Date.now();
+ const m={id:crypto.randomUUID(),lat,lng,notes:cut(q.body.notes,1000),scout:cut(q.body.scout,50)||'Scout',source:src,
+  address:cut(q.body.address,300),contactName:cut(q.body.contactName,100),contactPhone:cut(q.body.contactPhone,40),
+  photos:(q.files||[]).map(f=>'/uploads/'+f.filename),status:'open',enrouteBy:null,createdAt:now};
+ if(src==='grabgo'){const d=m.scout;Object.assign(m,{status:'hooked',enrouteBy:d,assignedDriver:d,claimedAt:now,enrouteAt:now,firstClaimedAt:now,grabMs:0,hookedAt:now})}
+ markers.push(m);save();logE('create',{id:m.id,scout:m.scout,source:src});
+ if(src==='grabgo'){logE('claim',{id:m.id,driver:m.scout});logE('hook',{id:m.id,driver:m.scout})}
+ io.emit('marker:new',m);r.json(m);});
+app.get('/api/geocode',async(q,r)=>{const t=String(q.query.q||'').trim().slice(0,300);if(!t)return r.status(400).json({error:'Enter an address'});
+ try{const x=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q='+encodeURIComponent(t),{headers:{'User-Agent':'TowScout/1.0 (tow-scout.onrender.com)','Accept-Language':'en'}});
+  if(!x.ok)throw new Error('geocoder HTTP '+x.status);const j=await x.json();r.json(j.map(p=>({lat:+p.lat,lng:+p.lon,label:p.display_name})))}
+ catch(e){r.status(502).json({error:'Address lookup failed ('+e.message+'). Try again or tap the map.'})}});
 app.post('/api/markers/:id/enroute',(q,r)=>{const m=find(q,r);if(!m)return;const d=(q.body.driver||'').slice(0,50);if(!mine(m,d,r))return;
  if(m.status==='open'){m.status='enroute';m.enrouteBy=d;m.assignedDriver=d;m.enrouteAt=m.claimedAt=Date.now();
   if(!m.firstClaimedAt){m.firstClaimedAt=m.claimedAt;m.grabMs=m.claimedAt-m.createdAt}save();logE('claim',{id:m.id,driver:d})}
@@ -44,16 +53,23 @@ const now0=Date.now();sessions.forEach(x=>{if(!x.end){x.end=now0;x.note='server 
 const saveS=()=>{fs.writeFileSync(SE,JSON.stringify(sessions.slice(-5000)));io.emit('stats:changed')};
 // close driver presence left open by a previous run
 {const o={};for(const e of events){if(e.type==='online')o[e.driver]=1;if(e.type==='offline')delete o[e.driver]}for(const d in o)events.push({t:now0,type:'offline',driver:d})}
+const locs={};
+const presence=()=>{const on=sessions.filter(x=>!x.end),c=r=>new Set(on.filter(x=>x.role===r).map(x=>x.name)).size;
+ return {scouts:c('scout'),drivers:c('driver'),dispatch:c('dispatch'),locs:Object.entries(locs).filter(([n])=>online[n]>0).map(([name,l])=>({name,...l}))}};
+const pushP=()=>io.to('ops').emit('presence',presence());
+app.get('/api/presence',(q,r)=>r.json(presence()));
 function bye(s){if(s.sess){s.sess.end=Date.now();s.sess=null;saveS()}if(s.drv){if(--online[s.drv]===0)logE('offline',{driver:s.drv});s.drv=null}}
-io.on('connection',s=>{s.on('hello',u=>{if(!u||!u.name)return;const name=String(u.name).slice(0,50),role=['scout','driver','manager'].includes(u.role)?u.role:'?';
+io.on('connection',s=>{s.on('hello',u=>{if(!u||!u.name)return;const name=String(u.name).slice(0,50),role=['scout','driver','manager','dispatch'].includes(u.role)?u.role:'?';
   if(s.sess&&s.sess.name===name&&s.sess.role===role)return;bye(s);
+  s.leave('ops');if(role==='manager'||role==='dispatch'){s.join('ops');setTimeout(()=>s.emit('presence',presence()),50)}
   s.sess={id:crypto.randomUUID(),name,role,start:Date.now(),end:null};sessions.push(s.sess);saveS();
-  if(role==='driver'){s.drv=name;online[name]=(online[name]||0)+1;if(online[name]===1)logE('online',{driver:name})}});
- s.on('disconnect',()=>bye(s))});
+  if(role==='driver'){s.drv=name;online[name]=(online[name]||0)+1;if(online[name]===1)logE('online',{driver:name})}pushP()});
+ s.on('loc',p=>{if(!s.drv||!p||!isFinite(+p.lat)||!isFinite(+p.lng))return;locs[s.drv]={lat:+p.lat,lng:+p.lng,acc:+p.acc||null,t:Date.now()};pushP()});
+ s.on('disconnect',()=>{bye(s);pushP()})});
 const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null,med=a=>{if(!a.length)return null;a=[...a].sort((x,y)=>x-y);return a[a.length>>1]};
 function stats(){
  const sc={},dr={};const D=n=>dr[n]??=({name:n,secured:0,dropped:0,hooked:0,enroute:0,lost:0,wot:0,idleMs:0,engagedMs:0,onlineMs:0,idleSpells:0,longestIdleMs:0});
- for(const m of markers){const s=sc[m.scout]??=({name:m.scout,marks:0,open:0,towed:0,dropped:0,lost:0,wot:0,grab:[],lostMark:[],lostClaim:[]});s.marks++;
+ for(const m of markers){const sk=m.source==='dispatch'?m.scout+' (Dispatch)':m.source==='grabgo'?m.scout+' (Grab&Go)':m.scout;const s=sc[sk]??=({name:sk,source:m.source||'scout',marks:0,open:0,towed:0,dropped:0,lost:0,wot:0,grab:[],lostMark:[],lostClaim:[]});s.marks++;
   if(m.grabMs!=null)s.grab.push(m.grabMs);
   if(ACTIVE.includes(m.status))s.open++;
   if(m.status==='secured'||m.status==='taken')s.towed++;if(m.status==='dropped')s.dropped++;

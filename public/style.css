@@ -28,3 +28,7 @@ button.manager{background:#27ae60}button.wot{background:#7f8c8d}.tag.manager{bac
 .g span{background:#161a20;border-radius:8px;padding:6px;font-size:12px;color:#aaa}.g b{display:block;font-size:18px;color:#eee}
 button.drop{background:#2d9cdb}
 #mtabs button.on{background:#27ae60}.g span.warn{background:#5a2a1a}.tl{width:100%;border-collapse:collapse;margin:6px 0}.tl td{padding:5px;border-bottom:1px solid #333;font-size:14px;vertical-align:top}.sc{cursor:pointer}
+button.dispatch{background:#9b51e0}.tag.dispatch{background:#9b51e0}body.dispatch header{border-color:#9b51e0}
+#legend{font-size:13px;background:#2a313b;padding:4px 8px;border-radius:8px}#disp input,#disp textarea{width:100%;padding:9px;border-radius:8px;border:1px solid #333;background:#111;color:#eee;margin:4px 0;font-size:16px}
+.err{color:#e74c3c}.truck{font-size:22px;filter:drop-shadow(0 0 3px #000);white-space:nowrap}.truck span{font-size:11px;background:#000c;color:#fff;padding:1px 4px;border-radius:4px;margin-left:2px}
+body.dispatch #side{width:340px}@media(max-width:700px){body.dispatch #side{height:50vh}header{flex-wrap:wrap}}

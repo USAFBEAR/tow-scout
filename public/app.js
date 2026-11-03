@@ -7,22 +7,22 @@ const markers={},layers={};let prov=null,notifs=JSON.parse(localStorage.getItem(
 const gmaps=m=>`https://www.google.com/maps?q=${m.lat},${m.lng}`;
 function toast(t,cls='',onclick){const d=document.createElement('div');d.className='toast '+cls;d.textContent=t;d.onclick=()=>{onclick&&onclick();d.remove()};$('#toasts').append(d);setTimeout(()=>d.remove(),onclick?12000:4000)}
 function setUser(u){user=u;localStorage.setItem('ts_user',JSON.stringify(u));document.body.className=u.role;
- $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${{scout:'Scout',driver:'Tow Driver',manager:'Manager'}[u.role]}</span>`;
- $('#bell').classList.toggle('hidden',u.role!=='driver');$('#hint').classList.toggle('hidden',u.role!=='scout');
+ $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${{scout:'Scout',driver:'Tow Driver',manager:'Manager',dispatch:'Dispatch'}[u.role]}</span>`;
+ $('#bell').classList.toggle('hidden',u.role!=='driver');$('#gng').classList.toggle('hidden',u.role!=='driver');$('#disp').classList.toggle('hidden',u.role!=='dispatch');$('#legend').classList.toggle('hidden',!['dispatch','manager'].includes(u.role));setTimeout(()=>{if(u.role!=='dispatch')clearDrv();if(u.role==='dispatch')map.setView(map.getCenter(),11);startLoc();try{sock.emit('hello',u)}catch{}},0);$('#hint').classList.toggle('hidden',u.role!=='scout');
  $('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');$('#mgr').classList.toggle('hidden',u.role!=='manager');$('#main').classList.toggle('hidden',u.role==='manager');if(u.role==='manager')setTimeout(loadStats,0);else setTimeout(()=>map.invalidateSize(),50);try{sock.emit('hello',u)}catch{}renderAll();renderNotifs()}
 document.querySelectorAll('#login [data-role]').forEach(b=>b.onclick=()=>{const n=$('#name').value.trim();if(!n)return $('#name').focus();setUser({name:n,role:b.dataset.role})});
 $('#switch').onclick=()=>{$('#name').value=user?.name||'';$('#login').classList.remove('hidden')};
 if(user)setUser(user);else $('#login').classList.remove('hidden');
 navigator.geolocation?.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],15);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#56ccf2'}).addTo(map).bindTooltip('You')},()=>{},{timeout:8000});
 function popup(m){const g=m.photos.map(p=>`<img src="${p}" onclick="lb('${p}')">`).join('');
- let a='';if(user?.role==='driver'){const me=m.enrouteBy===user.name;
+ let a='';const info=`${m.source==='dispatch'?'<small>📞 Dispatch</small><br>':m.source==='grabgo'?'<small>🪝 Grab&amp;Go</small><br>':''}${m.address?'<small>'+esc(m.address)+'</small><br>':''}${m.contactName||m.contactPhone?`<small>👤 ${esc(m.contactName)} ${m.contactPhone?`<a href="tel:${esc(m.contactPhone)}">${esc(m.contactPhone)}</a>`:''}</small><br>`:''}`;if(user?.role==='driver'){const me=m.enrouteBy===user.name;
   if(m.status==='open')a=`<button class="driver" onclick="act('${m.id}','enroute')">🚚 In route</button><button onclick="act('${m.id}','hooked')">🪝 Hooked</button>`;
   else if(me&&m.status==='enroute')a=`<button onclick="act('${m.id}','hooked')">🪝 Hooked</button><button onclick="act('${m.id}','release')">Release</button>`;
   else if(me&&m.status==='hooked')a=`<button class="ok" onclick="act('${m.id}','secured')">🏁 Secured (yard)</button><button class="drop" onclick="act('${m.id}','dropped')">💵 Dropped (paid/legal)</button><button onclick="act('${m.id}','release')">Release</button>`;
   if(m.status==='open'||me){if(m.status!=='hooked')a+=`<br><button class="danger" onclick="act('${m.id}','lost')">❌ Lost (not there)</button><button class="wot" onclick="act('${m.id}','wot')">⚖️ WOT (legal)</button>`}
   else a=`<small>Claimed by ${esc(m.enrouteBy)}</small>`}
  return `<div class="pop"><b>${lbl(m)}</b><br><small>By ${esc(m.scout)} · ${new Date(m.createdAt).toLocaleString()}</small>
- ${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${g}</div><p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Open in Google Maps</a></p>${a}</div>`}
+ ${info}${m.notes?`<p>${esc(m.notes)}</p>`:''}<div class="gallery">${g}</div><p><a href="${gmaps(m)}" target="_blank" rel="noopener">📍 Open in Google Maps</a></p>${a}</div>`}
 const lbl=m=>m.status==='enroute'?'🟡 In route: '+esc(m.enrouteBy):m.status==='hooked'?'🟣 Hooked: '+esc(m.enrouteBy):'🔴 Open';
 function renderMarker(m){markers[m.id]=m;const c={enroute:'#f2c94c',hooked:'#9b51e0'}[m.status]||'#e74c3c';
  if(layers[m.id]){layers[m.id].setIcon(icon(c));layers[m.id].setPopupContent(popup(m))}else layers[m.id]=L.marker([m.lat,m.lng],{icon:icon(c)}).addTo(map).bindPopup(popup(m),{maxWidth:280});renderList()}
@@ -36,7 +36,7 @@ window.act=async(id,a)=>{const url=['secured','dropped','lost','wot'].includes(a
  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver:user.name,reason:a})});const j=await r.json();
  if(!r.ok)return alert(j.error);if(a==='enroute')toast('You are in route. Others will see this spot is claimed.','info')};
 // scout placing
-map.on('click',e=>{if(user?.role!=='scout')return;if(prov)map.removeLayer(prov);prov=L.marker(e.latlng,{icon:icon('#2d9cdb'),draggable:true}).addTo(map);openForm()});
+map.on('click',e=>{if(user?.role==='dispatch')return setDisp(e.latlng);if(user?.role!=='scout')return;if(prov)map.removeLayer(prov);prov=L.marker(e.latlng,{icon:icon('#2d9cdb'),draggable:true}).addTo(map);openForm()});
 let files=[];function openForm(){files=[];$('#notes').value='';$('#photos').value='';$('#previews').innerHTML='';showLoc();$('#form').classList.remove('hidden')}
 function showLoc(){const p=prov.getLatLng();$('#loc').textContent=`📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`}
 $('#photos').onchange=e=>{for(const f of e.target.files){if(files.length>=5){alert('Max 5 photos');break}files.push(f)}e.target.value='';
@@ -94,7 +94,8 @@ async function loadMarks(){allMarks=await (await fetch('/api/marks')).json();let
 window.mdet=id=>{const m=allMarks.find(x=>x.id===id);if(!m)return;const end=m.securedAt||m.droppedAt||m.closedAt;
  const row=(k,v)=>v?`<tr><td>${k}</td><td>${v}</td></tr>`:'';
  $('#mdetail').innerHTML=`<button onclick="mtab('marks')">← All marks</button><h3>${OUT[m.status]||m.status}</h3><table class="tl">
- ${row('Marked',tm(m.createdAt)+' '+dt(m.createdAt)+' by '+esc(m.scout))}
+ ${row('Marked',tm(m.createdAt)+' '+dt(m.createdAt)+' by '+esc(m.scout)+' <small>('+({dispatch:'Dispatch',grabgo:'Grab&amp;Go self-spot'}[m.source]||'Scout')+')</small>')}
+ ${row('Address',esc(m.address))}${row('Contact',esc(m.contactName))}${row('Phone',m.contactPhone&&`<a href="tel:${esc(m.contactPhone)}">${esc(m.contactPhone)}</a>`)}
  ${row('Grabbed',m.firstClaimedAt&&`${tm(m.firstClaimedAt)} — <b>${fm(m.grabMs)} WTF</b> by ${esc(m.assignedDriver)}`)}
  ${row('In route',m.enrouteAt&&m.enrouteAt!==m.firstClaimedAt?tm(m.enrouteAt):'')}
  ${row('Picked up / Hooked',m.hookedAt&&`${tm(m.hookedAt)}${m.firstClaimedAt?' ('+fm(m.hookedAt-m.firstClaimedAt)+' after grab)':''}`)}
@@ -107,3 +108,43 @@ async function loadSess(){const a=await (await fetch('/api/sessions')).json(),by
  $('#msess').innerHTML=Object.entries(by).map(([d,ppl])=>`<h3>${d}</h3>`+Object.entries(ppl).map(([k,l])=>{const [r,n]=k.split('|'),tot=l.reduce((s,x)=>s+((x.end||Date.now())-x.start),0);
   return `<div class="sc"><b>${esc(n)}</b><span class="tag ${r}">${r}</span> · ${l.length} login${l.length>1?'s':''} · ${fm(tot)} total${r==='driver'&&l.length>3?' ⚠️':''}
   <table class="tl">${l.map(x=>`<tr><td>${tm(x.start)}</td><td>→ ${x.end?tm(x.end):'🟢 online'}</td><td>${fm((x.end||Date.now())-x.start)}${x.note?' <small>('+x.note+')</small>':''}</td></tr>`).join('')}</table></div>`}).join('')).join('')||'<small>No sessions yet</small>'}
+
+// presence legend (dispatch/manager only) + driver locations on dispatch map
+const drvL={};function clearDrv(){for(const k in drvL){map.removeLayer(drvL[k]);delete drvL[k]}}
+const truck=n=>L.divIcon({className:'',html:`<div class="truck">🚚<span>${esc(n)}</span></div>`,iconSize:[30,30],iconAnchor:[15,15]});
+sock.on('presence',p=>{if(!['dispatch','manager'].includes(user?.role))return;
+ $('#legend').innerHTML=`🔭 ${p.scouts} scout${p.scouts==1?'':'s'} · 🚚 ${p.drivers} driver${p.drivers==1?'':'s'} online`;
+ if(user.role!=='dispatch')return;const seen={};
+ p.locs.forEach(l=>{seen[l.name]=1;const tip=`${esc(l.name)} · ${new Date(l.t).toLocaleTimeString()}`;
+  if(drvL[l.name])drvL[l.name].setLatLng([l.lat,l.lng]).setTooltipContent(tip);else drvL[l.name]=L.marker([l.lat,l.lng],{icon:truck(l.name),zIndexOffset:1000}).addTo(map).bindTooltip(tip)});
+ for(const k in drvL)if(!seen[k]){map.removeLayer(drvL[k]);delete drvL[k]}});
+// driver shares GPS while logged in
+let watchId=null,lastPos=null,lastSent=0;
+function startLoc(){if(user?.role!=='driver'){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}return}
+ if(watchId!=null||!navigator.geolocation)return;
+ watchId=navigator.geolocation.watchPosition(p=>{lastPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};
+  if(Date.now()-lastSent>8000){lastSent=Date.now();sock.emit('loc',lastPos)}},e=>toast('Location sharing is off — Dispatch cannot see you. Allow location for this site.','info'),{enableHighAccuracy:true,maximumAge:10000,timeout:20000})}
+sock.on('connect',()=>{if(lastPos&&user?.role==='driver')sock.emit('loc',lastPos)});
+startLoc();
+// Grab&Go
+$('#gng').onclick=()=>{const go=async pos=>{const notes=prompt('Grab&Go — hooked at your current location.\nNotes (plate, make, color) optional:','');if(notes===null)return;
+  const fd=new FormData();fd.append('lat',pos.lat);fd.append('lng',pos.lng);fd.append('notes',notes);fd.append('scout',user.name);fd.append('source','grabgo');
+  const r=await fetch('/api/markers',{method:'POST',body:fd}),j=await r.json();if(!r.ok)return alert(j.error);
+  toast('Grab&Go logged as Hooked. Mark Secured or Dropped when done.','info');setTimeout(()=>focusM(j.id),300)};
+ if(lastPos&&Date.now()-lastSent<60000)return go(lastPos);
+ navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>go({lat:p.coords.latitude,lng:p.coords.longitude}),()=>{const c=map.getCenter();if(confirm('No GPS fix. Use the map center instead?'))go({lat:c.lat,lng:c.lng})},{enableHighAccuracy:true,timeout:15000}):go(map.getCenter())};
+// Dispatch form
+let dpin=null;function setDisp(ll,label){if(dpin)dpin.setLatLng(ll);else dpin=L.marker(ll,{icon:icon('#2d9cdb'),draggable:true}).addTo(map).on('dragend',()=>setDisp(dpin.getLatLng()));
+ if(label!==undefined)$('#daddr').value=label;$('#dloc').textContent=`📍 ${(+ll.lat).toFixed(5)}, ${(+ll.lng).toFixed(5)} (drag pin to adjust)`}
+$('#dfind').onclick=async()=>{const q=$('#daddr').value.trim();if(!q)return $('#daddr').focus();$('#dres').innerHTML='<small>Searching…</small>';
+ try{const r=await fetch('/api/geocode?q='+encodeURIComponent(q)),j=await r.json();if(!r.ok)throw new Error(j.error);
+  if(!j.length){$('#dres').innerHTML='<small class="err">No match. Add city/state, or tap the map.</small>';return}
+  window._geo=j;$('#dres').innerHTML=j.map((g,i)=>`<div class="nitem" onclick="pickG(${i})">${esc(g.label)}</div>`).join('');if(j.length===1)pickG(0)}
+ catch(e){$('#dres').innerHTML=`<small class="err">${esc(e.message)}</small>`}};
+$('#daddr').onkeydown=e=>{if(e.key==='Enter')$('#dfind').onclick()};
+window.pickG=i=>{const g=_geo[i];setDisp({lat:g.lat,lng:g.lng},g.label);map.setView([g.lat,g.lng],15);$('#dres').innerHTML=''};
+$('#dsend').onclick=async()=>{if(!dpin)return alert('Find an address or tap the map first');const p=dpin.getLatLng(),fd=new FormData();
+ [['lat',p.lat],['lng',p.lng],['address',$('#daddr').value],['contactName',$('#dname').value],['contactPhone',$('#dphone').value],['notes',$('#dnotes').value],['scout',user.name],['source','dispatch']].forEach(([k,v])=>fd.append(k,v));
+ $('#dsend').disabled=true;try{const r=await fetch('/api/markers',{method:'POST',body:fd}),j=await r.json();if(!r.ok)throw new Error(j.error);
+  ['daddr','dname','dphone','dnotes'].forEach(i=>$('#'+i).value='');map.removeLayer(dpin);dpin=null;$('#dloc').textContent='Find an address or tap the map.';toast('Sent to all drivers ✅','info');map.setView([p.lat,p.lng],11)}
+ catch(e){alert('Failed: '+e.message)}$('#dsend').disabled=false};

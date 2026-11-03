@@ -2,14 +2,19 @@
 <title>Tow Scout</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css"></head><body>
 <header><b>🚩 Tow Scout</b><span id="who"></span>
-<button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
+<span id="legend" class="hidden"></span><button id="gng" class="hidden ok">🪝 Grab&amp;Go</button><button id="bell" class="hidden">🔔<span id="badge">0</span></button><button id="switch">Switch</button></header>
 <div id="main"><div id="map"></div>
-<aside id="side"><h3>Open spots (<span id="count">0</span>)</h3><div id="list"></div></aside></div>
+<aside id="side"><div id="disp" class="hidden"><h3>📞 Dispatch a tow</h3>
+<div class="row" style="margin:0"><input id="daddr" placeholder="Address (street, city)"><button id="dfind" style="flex:0">Find</button></div>
+<div id="dres"></div><small id="dloc">Find an address or tap the map.</small>
+<input id="dname" placeholder="Contact name (optional)"><input id="dphone" type="tel" placeholder="Phone (optional)">
+<textarea id="dnotes" placeholder="Notes: vehicle, plate, gate code…"></textarea>
+<button id="dsend" class="driver" style="width:100%">Send to drivers</button><hr></div><h3>Open spots (<span id="count">0</span>)</h3><div id="list"></div></aside></div>
 <div id="mgr" class="hidden"><div class="row" style="margin:0 0 6px"><h2 style="flex:1;margin:0">Manager dashboard</h2><button id="mgrref">↻ Refresh</button></div><div id="mtabs" class="row" style="margin:0 0 8px"><button data-t="stats" class="on" onclick="mtab('stats')">📊 Stats</button><button data-t="marks" onclick="mtab('marks')">🚩 Marks</button><button data-t="sess" onclick="mtab('sess')">🕒 Logins</button></div><div id="mgrbody">Loading…</div><div id="mmarks" class="hidden"></div><div id="mdetail" class="hidden"></div><div id="msess" class="hidden"></div></div>
 <div id="hint"></div>
 <div id="login" class="modal"><div class="card"><h2>Welcome</h2>
 <input id="name" placeholder="Your display name"><div class="row">
-<button data-role="scout" class="scout">I'm a Scout</button><button data-role="driver" class="driver">I'm a Tow Driver</button></div><div class="row"><button data-role="manager" class="manager">I'm a Manager</button></div></div></div>
+<button data-role="scout" class="scout">I'm a Scout</button><button data-role="driver" class="driver">I'm a Tow Driver</button></div><div class="row"><button data-role="manager" class="manager">I'm a Manager</button><button data-role="dispatch" class="dispatch">I'm Dispatch</button></div></div></div>
 <div id="form" class="modal hidden"><div class="card"><h2>Report vehicle</h2><p id="loc"></p>
 <textarea id="notes" placeholder="Notes (plate, color, make…) optional"></textarea>
 <label class="file">📷 Add photos (up to 5)<input id="photos" type="file" accept="image/*" multiple></label>
