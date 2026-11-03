@@ -8,7 +8,7 @@ const gmaps=m=>`https://www.google.com/maps?q=${m.lat},${m.lng}`;
 function toast(t,cls='',onclick){const d=document.createElement('div');d.className='toast '+cls;d.textContent=t;d.onclick=()=>{onclick&&onclick();d.remove()};$('#toasts').append(d);setTimeout(()=>d.remove(),onclick?12000:4000)}
 function setUser(u){user=u;localStorage.setItem('ts_user',JSON.stringify(u));document.body.className=u.role;
  $('#who').innerHTML=`${esc(u.name)}<span class="tag ${u.role}">${{scout:'Scout',driver:'Tow Driver',manager:'Manager',dispatch:'Dispatch'}[u.role]}</span>`;
- $('#bell').classList.toggle('hidden',u.role!=='driver');$('#gng').classList.toggle('hidden',u.role!=='driver');$('#disp').classList.toggle('hidden',u.role!=='dispatch');$('#legend').classList.toggle('hidden',!['dispatch','manager'].includes(u.role));setTimeout(()=>{if(u.role!=='dispatch')clearDrv();if(u.role==='dispatch')map.setView(map.getCenter(),11);startLoc();try{sock.emit('hello',u)}catch{}},0);$('#hint').classList.toggle('hidden',u.role!=='scout');
+ $('#bell').classList.toggle('hidden',u.role!=='driver');$('#gng').classList.toggle('hidden',u.role!=='driver');$('#disp').classList.toggle('hidden',u.role!=='dispatch');$('#dbox').classList.toggle('hidden',!['dispatch','manager'].includes(u.role));$('#legend').classList.toggle('hidden',!['dispatch','manager'].includes(u.role));setTimeout(()=>{if(u.role!=='dispatch')clearDrv();if(u.role==='dispatch')map.setView(map.getCenter(),11);startLoc();try{sock.emit('hello',u)}catch{}},0);$('#hint').classList.toggle('hidden',u.role!=='scout');
  $('#ltitle').textContent=u.role==='scout'?'My open marks':u.role==='driver'?'Available & my tows':'Open spots';$('#hint').textContent='Tap the map where the vehicle is parked';$('#login').classList.add('hidden');$('#mgr').classList.toggle('hidden',u.role!=='manager');$('#main').classList.toggle('hidden',u.role==='manager');if(u.role==='manager')setTimeout(loadStats,0);else setTimeout(()=>map.invalidateSize(),50);try{sock.emit('hello',u)}catch{}renderAll();renderNotifs()}
 document.querySelectorAll('#login [data-role]').forEach(b=>b.onclick=()=>{const n=$('#name').value.trim();if(!n)return $('#name').focus();setUser({name:n,role:b.dataset.role})});
 $('#switch').onclick=()=>{$('#name').value=user?.name||'';$('#login').classList.remove('hidden')};
@@ -116,7 +116,7 @@ async function loadSess(){const a=await (await fetch('/api/sessions')).json(),by
 const drvL={};function clearDrv(){for(const k in drvL){map.removeLayer(drvL[k]);delete drvL[k]}}
 const truck=n=>L.divIcon({className:'',html:`<div class="truck">🚚<span>${esc(n)}</span></div>`,iconSize:[30,30],iconAnchor:[15,15]});
 sock.on('presence',p=>{if(!['dispatch','manager'].includes(user?.role))return;
- $('#legend').innerHTML=`🔭 ${p.scouts} scout${p.scouts==1?'':'s'} · 🚚 ${p.drivers} driver${p.drivers==1?'':'s'} online`;
+ $('#dbd').textContent=p.drivers;$('#dbs').textContent=p.scouts;$('#legend').innerHTML=`🔭 ${p.scouts} scout${p.scouts==1?'':'s'} · 🚚 ${p.drivers} driver${p.drivers==1?'':'s'} online`;
  if(user.role!=='dispatch')return;const seen={};
  p.locs.forEach(l=>{seen[l.name]=1;const tip=`${esc(l.name)} · ${new Date(l.t).toLocaleTimeString()}`;
   if(drvL[l.name])drvL[l.name].setLatLng([l.lat,l.lng]).setTooltipContent(tip);else drvL[l.name]=L.marker([l.lat,l.lng],{icon:truck(l.name),zIndexOffset:1000}).addTo(map).bindTooltip(tip)});

@@ -33,3 +33,7 @@ button.dispatch{background:#9b51e0}.tag.dispatch{background:#9b51e0}body.dispatc
 .err{color:#e74c3c}.truck{font-size:22px;filter:drop-shadow(0 0 3px #000);white-space:nowrap}.truck span{font-size:11px;background:#000c;color:#fff;padding:1px 4px;border-radius:4px;margin-left:2px}
 body.dispatch #side{width:340px}@media(max-width:700px){body.dispatch #side{height:50vh}header{flex-wrap:wrap}}
 .addr{display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px}
+#dbox{position:fixed;top:64px;right:10px;z-index:1500;display:flex;gap:6px;background:#1b2027ee;border:2px solid #9b51e0;border-radius:12px;padding:8px;box-shadow:0 4px 14px #000a}
+body.manager #dbox{border-color:#27ae60}#dbox div{text-align:center;min-width:78px}#dbox b{display:block;font-size:28px;line-height:1}#dbox span{font-size:11px;color:#bbb}
+body.dispatch #legend,body.manager #legend{display:none}body.dispatch #toasts,body.manager #toasts{top:auto;bottom:12px}
+body.manager #mgr{padding-top:90px}
